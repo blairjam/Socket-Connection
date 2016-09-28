@@ -35,7 +35,7 @@ public class TestUDPClient extends UDPConnector {
 	public synchronized DatagramPacket createPacketToSend() {
 		byte[] msg = new String("ping").getBytes();
 		
-		if (sent < 1) {
+		if (sent < 10) {
 			sent++;
 			
 			InetAddress addr = null;
@@ -53,6 +53,6 @@ public class TestUDPClient extends UDPConnector {
 	
 	public static void main(String[] args) {
 		TestUDPClient client = new TestUDPClient();
-		client.start("");
+		client.start("localhost");
 	}
 }

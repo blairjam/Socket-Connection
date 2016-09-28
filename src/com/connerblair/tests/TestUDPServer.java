@@ -2,18 +2,19 @@ package com.connerblair.tests;
 
 import java.net.DatagramPacket;
 import java.net.InetAddress;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 import com.connerblair.UDPConnector;
 
 public class TestUDPServer extends UDPConnector {
 	private static int port = 4435;
 	
-	private int portRespond = 0;
-	private InetAddress addrRespond;
-	private volatile String msgRespond;
+	private ConcurrentLinkedQueue<Packet> responses;
 	
 	public TestUDPServer() {
 		super(port);
+		responses = new ConcurrentLinkedQueue<Packet>();
 	}
 
 	@Override
@@ -23,33 +24,41 @@ public class TestUDPServer extends UDPConnector {
 
 	@Override
 	public synchronized void handlePacketReceived(DatagramPacket packet) {
-		String msg = new String(packet.getData());
+		String msg = new String(packet.getData()).trim();
 		
 		System.out.println("From client: " + msg);
 		
-		portRespond = packet.getPort();
-		addrRespond = packet.getAddress();
-		
 		if (msg.equalsIgnoreCase("ping")) {			
-			msgRespond = "pong";
-		} else {
-			msgRespond = null;
+			responses.offer(new Packet(packet.getAddress(), packet.getPort(), "pong"));
 		}
 	}
 
 	@Override
 	public synchronized DatagramPacket createPacketToSend() {
-		if (msgRespond == null) {
+		Packet nextResponse = responses.poll();
+		if (nextResponse == null) {
 			return null;
 		}
 		
-		byte[] data = msgRespond.getBytes();
+		byte[] data = nextResponse.Message.getBytes();
 		
-		return new DatagramPacket(data, data.length, addrRespond, portRespond);
+		return new DatagramPacket(data, data.length, nextResponse.Address, nextResponse.Port);
 	}
 	
 	public static void main(String[] args) {
 		TestUDPServer server = new TestUDPServer();
 		server.start("localhost");
+	}
+	
+	private class Packet {
+		public InetAddress Address;
+		public int Port;
+		public String Message;
+		
+		public Packet(InetAddress address, int port, String message) {
+			Address = address;
+			Port = port;
+			Message = message;
+		}
 	}
 }
