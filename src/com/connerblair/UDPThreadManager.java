@@ -9,7 +9,8 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 public class UDPThreadManager {
-	private int port = -1;
+	private String addr;
+	private int port;
 
 	private volatile boolean receiverThreadRunning = false;
 	private volatile boolean senderThreadRunning = false;
@@ -27,39 +28,36 @@ public class UDPThreadManager {
 	private Thread receiverThread;
 	private Thread senderThread;
 
-	public UDPThreadManager(Consumer<Exception> functionHandleError,
-			Consumer<DatagramPacket> functionHandlePacketReceived,
-			Supplier<DatagramPacket> functionCreatePacketToSend) {
-		this(-1, functionHandleError, functionHandlePacketReceived, functionCreatePacketToSend);
-	}
-
-	public UDPThreadManager(int port, Consumer<Exception> functionHandleError,
-			Consumer<DatagramPacket> functionHandlePacketReceived,
-			Supplier<DatagramPacket> functionCreatePacketToSend) {
+	public UDPThreadManager(String addr, int port, 
+							Consumer<Exception> functionHandleError,
+							Consumer<DatagramPacket> functionHandlePacketReceived,
+							Supplier<DatagramPacket> functionCreatePacketToSend) {
+		this.addr = addr;
 		this.port = port;
 		this.functionHandleError = functionHandleError;
 		this.functionHandlePacketReceived = functionHandlePacketReceived;
 		this.functionCreatePacketToSend = functionCreatePacketToSend;
 	}
 
-	public void initialize(InetAddress addr) {
-		if (addr != null) {
-			try {
-				socket = new DatagramSocket(port, addr);
-				receiver = new SocketReceiver();
-				sender = new SocketSender();
-			} catch (SocketException e) {
-				functionHandleError.accept(e);
-			}
-		} else {
-			try {
-				socket = new DatagramSocket(port);
-				receiver = new SocketReceiver();
-				sender = new SocketSender();
-			} catch (SocketException e) {
-				functionHandleError.accept(e);
-			}
+	public boolean initialize() {
+		InetAddress host = null;
+		try {
+			host = InetAddress.getByName(addr);
+		} catch(Exception e) {
+			functionHandleError.accept(new UDPCustomException("Host name could not be resolved. Name: " + addr));
+			return false;
 		}
+		
+		try {
+			socket = new DatagramSocket(port, host);
+			receiver = new SocketReceiver();
+			sender = new SocketSender();
+		} catch (SocketException e) {
+			functionHandleError.accept(e);
+			return false;
+		}
+		
+		return true;
 	}
 
 	public void start() {
@@ -88,6 +86,14 @@ public class UDPThreadManager {
 		} catch (InterruptedException e) {
 			functionHandleError.accept(e);
 		}
+	}
+	
+	public void setAddr(String addr) {
+		this.addr = addr;
+	}
+	
+	public String getAddr() {
+		return addr;
 	}
 
 	public void setPort(int port) {

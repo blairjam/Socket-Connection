@@ -1,36 +1,29 @@
 package com.connerblair;
 
 import java.net.DatagramPacket;
-import java.net.InetAddress;
 
 public abstract class UDPConnector {
 	private UDPThreadManager threadManager;
 	
 	protected UDPConnector() {
-		threadManager = new UDPThreadManager((e) -> this.handleError(e),
-											 (p) -> this.handlePacketReceived(p),
-											 ()  -> this.createPacketToSend());
+		this(-1);
+	}
+	
+	protected UDPConnector(int port) {
+		this("localhost", port);
 	}
 
-	protected UDPConnector(int port) {
-		threadManager = new UDPThreadManager(port,
+	protected UDPConnector(String addr, int port) {
+		threadManager = new UDPThreadManager(addr, port,
 											 (e) -> this.handleError(e),
 											 (p) -> this.handlePacketReceived(p),
 											 ()  -> this.createPacketToSend());
 	}
 	
 	public void start(String addr) {
-		if (!addr.isEmpty()) {
-			try {
-				threadManager.initialize(InetAddress.getByName(addr));
-			} catch (Exception e) {
-				
-			}
-		} else {
-			threadManager.initialize(null);
+		if (threadManager.initialize()) {
+			threadManager.start();
 		}
-		
-		threadManager.start();
 	}
 	
 	public void stop() {
