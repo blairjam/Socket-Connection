@@ -1,4 +1,4 @@
-package com.connerblair;
+package com.connerblair.tcp;
 
 public class TCPClient {
 

@@ -4,7 +4,7 @@ import java.net.DatagramPacket;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 
-import com.connerblair.UDPConnector;
+import com.connerblair.udp.UDPConnector;
 
 public class TestUDPClient extends UDPConnector {
 	private static int port = 4436;
@@ -53,6 +53,6 @@ public class TestUDPClient extends UDPConnector {
 	
 	public static void main(String[] args) {
 		TestUDPClient client = new TestUDPClient();
-		client.start("localhost");
+		client.start();
 	}
 }

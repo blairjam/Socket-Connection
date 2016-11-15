@@ -5,7 +5,7 @@ import java.net.InetAddress;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
-import com.connerblair.UDPConnector;
+import com.connerblair.udp.UDPConnector;
 
 public class TestUDPServer extends UDPConnector {
 	private static int port = 4435;
