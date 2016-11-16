@@ -27,7 +27,20 @@ public abstract class TCPServer {
 		threadManager.stop();
 	}
 	
-	protected abstract void handleError(Exception e);
+	public final void sendToAllClients(Object msg) {
+	    threadManager.sendToAllClients(msg);
+	}
+	
+	public final int getNumberOfClients() {
+	    return threadManager.getNumberOfClients();
+	}
+	
+	protected abstract void clientConnected(ClientConnection client);
 	protected abstract void clientDisconnected(ClientConnection client);
+	protected abstract void clientMessageReceived(ClientConnection client, Object msg);
 	protected abstract void handleClientError(ClientConnection client, Exception e);
+	protected abstract void handleError(Exception e);
+	protected abstract void serverStarted();
+	protected abstract void serverPaused();
+	protected abstract void serverStopped();
 }

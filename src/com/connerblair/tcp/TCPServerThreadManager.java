@@ -31,7 +31,7 @@ class TCPServerThreadManager {
 		clientConnections = new ThreadGroup("ClientConnetion_Threads") {
 		    @Override
 	        public void uncaughtException(Thread t, Throwable e) {
-	            server.handleClientError(((ClientConnectionInputReaderThread) t).getClient(), new ConnectionException("Client Error", e));
+	            server.handleClientError(((ClientConnectable) t).getClient(), new ConnectionException("Client Error", e));
 	        };
 		};
 	}	
@@ -62,6 +62,7 @@ class TCPServerThreadManager {
 	
 	void pause() {
 		listenerState = ListenerState.Paused;
+		server.serverPaused();
 	}
 	
 	void stop() {
@@ -78,11 +79,27 @@ class TCPServerThreadManager {
 		} catch (IOException e) {
 		    server.handleError(e);
 		}
+		
+		server.serverStopped();
+	}
+	
+	void sendToAllClients(Object msg) {
+	    Thread[] connections = getAllConnections();
+	    
+	    for (Thread connection : connections) {
+	        ClientConnection client = ((ClientConnectable) connection).getClient();
+	        client.sendToClient(msg);
+	    }
+	}
+	
+	int getNumberOfClients() {
+	    return clientConnections.activeCount();
 	}
 	
 	private boolean initialize() {
 		try {
 			serverSocket = addr == null ? new ServerSocket(port, backlog) : new ServerSocket(port, backlog, InetAddress.getByName(addr));
+			serverSocket.setSoTimeout(timeout);
 		} catch (UnknownHostException e) {
 		    server.handleError(new ConnectionException("Host name could not be resolved. Name: " + addr, e));
 			return false;
@@ -94,6 +111,14 @@ class TCPServerThreadManager {
 		return true;
 	}
 	
+	private Thread[] getAllConnections() 
+	{
+	    Thread[] connections = new Thread[clientConnections.activeCount()];
+	    clientConnections.enumerate(connections);
+	    
+	    return connections;
+	}
+	
 	private enum ListenerState {
 		Stopped,
 		Paused,
@@ -103,6 +128,8 @@ class TCPServerThreadManager {
 	private class ConnectionListener implements Runnable {
 		@Override
 		public void run() {
+		    server.serverStarted();
+		    
 			while (listenerState != ListenerState.Stopped) {
 			    // Listening thread is in a paused state. Sleep for 50ms and check again.
 				if (listenerState == ListenerState.Paused) {
