@@ -1,51 +1,171 @@
 package com.connerblair.udp;
 
 import java.net.DatagramPacket;
+import java.net.DatagramSocket;
+import java.net.InetAddress;
+import java.net.SocketException;
+import java.net.UnknownHostException;
+
+import com.connerblair.exceptions.ConnectionException;
 
 public abstract class UDPConnector {
-	private static final int DEF_PORT = -1;
-	
-	private UDPThreadManager threadManager;
-	
-	protected UDPConnector() {
-		this(DEF_PORT);
-	}
-	
-	protected UDPConnector(int port) {
-		this(null, port);
-	}
+    public static final int DEF_PORT = -1;
 
-	protected UDPConnector(String addr, int port) {
-		threadManager = new UDPThreadManager(addr, port, this);
-	}
-	
-	public final void start() {
-		threadManager.start();
-	}
-	
-	public final void stop() {
-		threadManager.stop();
-	}
-	
-	public final int getPort() {
-		return threadManager.getPort();
-	}
-	
-	public final void setPort(int port) {
-		threadManager.setPort(port);
-	}
-	
-	public final String getAddr() {
-		return threadManager.getAddr();
-	}
-	
-	public final void setAddr(String addr) {
-		threadManager.setAddr(addr);
-	}
-	
-	protected abstract void handleError(Exception e);
+    private int port;
+    private InetAddress addr;
+
+    private final Object receiverLock = new Object();
+    private final Object senderLock = new Object();
+
+    private boolean receiverThreadRunning = false;
+    private boolean senderThreadRunning = false;
+
+    private DatagramSocket socket;
+    private UDPConnectorSocketReceiverThread receiverThread;
+    private UDPConnectorSocketSenderThread senderThread;
+
+    protected UDPConnector() {
+        this(DEF_PORT);
+    }
+
+    protected UDPConnector(int port) {
+        this(port, null);
+    }
+
+    protected UDPConnector(int port, String address) {
+        this.port = port;
+
+        try {
+            addr = InetAddress.getByName(address);
+        } catch (UnknownHostException e) {
+            handleError(new ConnectionException("Host name could not be resolved. Name: " + address, e));
+            addr = null;
+        }
+    }
+
+    public final void start() {
+        if (!initialize()) {
+            return;
+        }
+
+        synchronized (receiverLock) {
+            receiverThreadRunning = true;
+        }
+        synchronized (senderLock) {
+            senderThreadRunning = true;
+        }
+
+        receiverThread = new UDPConnectorSocketReceiverThread(this);
+        senderThread = new UDPConnectorSocketSenderThread(this);
+
+        receiverThread.start();
+        senderThread.start();
+    }
+
+    public final void stop() {
+        synchronized (receiverLock) {
+            receiverThreadRunning = false;
+        }
+        synchronized (senderLock) {
+            senderThreadRunning = false;
+        }
+
+        try {
+            receiverThread.join();
+        } catch (InterruptedException e) {
+            handleError(e);
+        }
+
+        try {
+            senderThread.join();
+        } catch (InterruptedException e) {
+            handleError(e);
+        }
+
+        socket.close();
+    }
+
+    public final int getPort() {
+        return port;
+    }
+
+    public final void setPort(int port) {
+        if (isRunning()) {
+            handleError(new ConnectionException("Cannot change port while server is running."));
+        } else {
+            this.port = port;
+        }
+    }
+
+    public final InetAddress getAddr() {
+        return addr;
+    }
+
+    public final void setAddr(String address) {
+        try {
+            setAddr(InetAddress.getByName(address));
+        } catch (UnknownHostException e) {
+            handleError(new ConnectionException("Host name could not be resolved. Name: " + address, e));
+            addr = null;
+        }
+    }
+
+    public final void setAddr(InetAddress addr) {
+        if (isRunning()) {
+            handleError(new ConnectionException("Cannot change address while server is running."));
+        } else {
+            this.addr = addr;
+        }
+    }
+
+    public final boolean isRunning() {
+        return receiverThreadRunning || senderThreadRunning;
+    }
+
+    DatagramSocket getSocket() {
+        return socket;
+    }
+
+    boolean isReceiverThreadRunning() {
+        synchronized (receiverLock) {
+            return receiverThreadRunning;
+        }
+    }
+
+    boolean isSenderThreadRunning() {
+        synchronized (senderLock) {
+            return senderThreadRunning;
+        }
+    }
+
+    protected Object getReceiverLock() {
+        return receiverLock;
+    }
+
+    protected Object getSenderLock() {
+        return senderLock;
+    }
+
+    protected abstract void handleError(Exception e);
+
     protected abstract void handlePacketReceived(DatagramPacket packet);
+
+    protected abstract byte[] getByteBuffer();
+
     protected abstract DatagramPacket createPacketToSend();
+
     protected abstract void receiverRunning();
+
     protected abstract void senderRunning();
+
+    private boolean initialize() {
+        try {
+            socket = addr == null ? new DatagramSocket(port) : new DatagramSocket(port, addr);
+        } catch (SocketException e) {
+            handleError(new ConnectionException("A problem occured while intilizing the socket.", e));
+            return false;
+        }
+
+        return true;
+    }
 }
