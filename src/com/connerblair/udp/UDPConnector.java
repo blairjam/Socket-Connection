@@ -13,14 +13,13 @@ public abstract class UDPConnector {
 
     private int port;
     private InetAddress addr;
+    
+    private DatagramSocket socket;
 
     private final Object receiverLock = new Object();
     private final Object senderLock = new Object();
-
     private boolean receiverThreadRunning = false;
     private boolean senderThreadRunning = false;
-
-    private DatagramSocket socket;
     private UDPConnectorSocketReceiverThread receiverThread;
     private UDPConnectorSocketSenderThread senderThread;
 
@@ -38,7 +37,7 @@ public abstract class UDPConnector {
         try {
             addr = InetAddress.getByName(address);
         } catch (UnknownHostException e) {
-            handleError(new ConnectionException("Host name could not be resolved. Name: " + address, e));
+            handleException(new ConnectionException("Host name could not be resolved. Name: " + address, e));
             addr = null;
         }
     }
@@ -73,13 +72,13 @@ public abstract class UDPConnector {
         try {
             receiverThread.join();
         } catch (InterruptedException e) {
-            handleError(e);
+            handleException(e);
         }
 
         try {
             senderThread.join();
         } catch (InterruptedException e) {
-            handleError(e);
+            handleException(e);
         }
 
         socket.close();
@@ -91,7 +90,7 @@ public abstract class UDPConnector {
 
     public final void setPort(int port) {
         if (isRunning()) {
-            handleError(new ConnectionException("Cannot change port while server is running."));
+            handleException(new ConnectionException("Cannot change port while server is running."));
         } else {
             this.port = port;
         }
@@ -105,21 +104,31 @@ public abstract class UDPConnector {
         try {
             setAddr(InetAddress.getByName(address));
         } catch (UnknownHostException e) {
-            handleError(new ConnectionException("Host name could not be resolved. Name: " + address, e));
+            handleException(new ConnectionException("Host name could not be resolved. Name: " + address, e));
             addr = null;
         }
     }
 
     public final void setAddr(InetAddress addr) {
         if (isRunning()) {
-            handleError(new ConnectionException("Cannot change address while server is running."));
+            handleException(new ConnectionException("Cannot change address while server is running."));
         } else {
             this.addr = addr;
         }
     }
 
     public final boolean isRunning() {
-        return receiverThreadRunning || senderThreadRunning;
+    	boolean running;
+    	
+        synchronized(receiverLock) {
+        	running = receiverThreadRunning;
+        }
+        
+        synchronized(senderLock) {
+        	running = running && senderThreadRunning;
+        }
+        
+        return running;
     }
 
     DatagramSocket getSocket() {
@@ -146,7 +155,7 @@ public abstract class UDPConnector {
         return senderLock;
     }
 
-    protected abstract void handleError(Exception e);
+    protected abstract void handleException(Exception e);
 
     protected abstract void handlePacketReceived(DatagramPacket packet);
 
@@ -162,7 +171,7 @@ public abstract class UDPConnector {
         try {
             socket = addr == null ? new DatagramSocket(port) : new DatagramSocket(port, addr);
         } catch (SocketException e) {
-            handleError(new ConnectionException("A problem occured while intilizing the socket.", e));
+            handleException(new ConnectionException("A problem occured while intilizing the socket.", e));
             return false;
         }
 

@@ -21,7 +21,7 @@ public class TestUDPServer extends UDPConnector {
     }
 
     @Override
-    public synchronized void handleError(Exception e) {
+    public synchronized void handleException(Exception e) {
         System.out.println(e.getMessage());
     }
 

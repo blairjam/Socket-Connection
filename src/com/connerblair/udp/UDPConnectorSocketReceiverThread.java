@@ -23,7 +23,7 @@ class UDPConnectorSocketReceiverThread extends Thread {
             try {
                 parentConnector.getSocket().receive(toReceive);
             } catch (IOException e) {
-                parentConnector.handleError(e);
+                parentConnector.handleException(e);
             }
             
             parentConnector.handlePacketReceived(toReceive);

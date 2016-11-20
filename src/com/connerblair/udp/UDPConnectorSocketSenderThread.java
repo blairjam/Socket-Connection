@@ -24,7 +24,7 @@ class UDPConnectorSocketSenderThread extends Thread {
                 try {
                     Thread.sleep(100);
                 } catch (InterruptedException e) {
-                    parentConnector.handleError(e);
+                    parentConnector.handleException(e);
                 }
                 
                 continue;
@@ -33,7 +33,7 @@ class UDPConnectorSocketSenderThread extends Thread {
             try {
                 parentConnector.getSocket().send(toSend);
             } catch (IOException e) {
-                parentConnector.handleError(e);
+                parentConnector.handleException(e);
             }
         }
     }

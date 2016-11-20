@@ -4,6 +4,7 @@ class ClientConnectionInputReaderThread extends Thread {
     private ClientConnection parentConnection;
     
     ClientConnectionInputReaderThread(ClientConnection parentConnection) {
+    	super();
         this.parentConnection = parentConnection;
     }
     

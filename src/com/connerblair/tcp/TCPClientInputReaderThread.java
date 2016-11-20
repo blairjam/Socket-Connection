@@ -1,13 +1,27 @@
 package com.connerblair.tcp;
 
 class TCPClientInputReaderThread extends Thread {
+	private TCPClient parentClient;
 
-    TCPClientInputReaderThread() {
-        super();
-    }
-    
-    @Override
-    public void run() {
-        
-    }
+	TCPClientInputReaderThread(TCPClient parentClient) {
+		super();
+		this.parentClient = parentClient;
+	}
+
+	@Override
+	public void run() {
+		parentClient.connectionClosed();
+
+		Object msg;
+
+		while (parentClient.isClientReaderThreadRunning()) {
+			try {
+				msg = parentClient.getConnectionInputStream().readObject();
+				parentClient.handleMessageFromServer(msg);
+			} catch (Exception e) {
+				parentClient.handleException(e);
+				parentClient.closeConnection();
+			}
+		}
+	}
 }

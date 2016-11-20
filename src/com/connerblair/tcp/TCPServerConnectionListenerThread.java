@@ -6,7 +6,8 @@ import java.net.Socket;
 class TCPServerConnectionListenerThread extends Thread {
     private TCPServer parentServer;
     
-    TCPServerConnectionListenerThread(TCPServer parentServer) { 
+    TCPServerConnectionListenerThread(TCPServer parentServer) {
+    	super();
         this.parentServer = parentServer;
     }
     
