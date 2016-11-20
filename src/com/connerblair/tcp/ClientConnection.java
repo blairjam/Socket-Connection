@@ -13,11 +13,11 @@ public final class ClientConnection {
     private TCPServer parentServer;
     private Socket clientSocket;
 
-    private volatile boolean inputReaderThreadRunning = false;
-
     private ObjectInputStream input;
     private ObjectOutputStream output;
-
+    
+    private final Object inputReaderLock = new Object();
+    private boolean inputReaderThreadRunning = false;
     private ClientConnectionInputReaderThread inputReaderThread;
 
     public ClientConnection(TCPServer parentServer, Socket clientSocket) {
@@ -27,41 +27,45 @@ public final class ClientConnection {
         try {
             this.clientSocket.setSoTimeout(0);
         } catch (SocketException e) {
-            parentServer.handleClientError(this, e);
+            parentServer.handleClientException(this, e);
         }
 
         try {
             input = new ObjectInputStream(clientSocket.getInputStream());
             output = new ObjectOutputStream(clientSocket.getOutputStream());
         } catch (IOException e) {
-            parentServer.handleClientError(this, e);
+            parentServer.handleClientException(this, e);
         }
 
-        inputReaderThreadRunning = true;
+        synchronized (inputReaderLock) {
+            inputReaderThreadRunning = true;
+        }
         inputReaderThread = new ClientConnectionInputReaderThread(this);
         inputReaderThread.start();
     }
 
     public void sendToClient(Object msg) {
         if (clientSocket == null || output == null) {
-            parentServer.handleClientError(this, new ConnectionException("Client socket does not exist."));
+            parentServer.handleClientException(this, new ConnectionException("Client socket does not exist."));
             return;
         }
 
         try {
             output.writeObject(msg);
         } catch (IOException e) {
-            parentServer.handleClientError(this, e);
+            parentServer.handleClientException(this, e);
         }
     }
 
     public void closeConnection() {
-        inputReaderThreadRunning = false;
+        synchronized (inputReaderLock) {
+            inputReaderThreadRunning = false;
+        }
 
         try {
             inputReaderThread.join();
         } catch (InterruptedException e) {
-            parentServer.handleClientError(this, e);
+            parentServer.handleClientException(this, e);
         }
 
         try {
@@ -77,12 +81,12 @@ public final class ClientConnection {
                 output.close();
             }
         } catch (IOException e) {
-            parentServer.handleClientError(this, e);
+            parentServer.handleClientException(this, e);
         } finally {
             output = null;
             input = null;
             clientSocket = null;
-        }   
+        }
 
         parentServer.clientDisconnected(this);
     }
@@ -90,24 +94,26 @@ public final class ClientConnection {
     public InetAddress getInetAddress() {
         return clientSocket == null ? null : clientSocket.getInetAddress();
     }
-    
+
     ObjectInputStream getConnectionInputStream() {
         return input;
     }
-    
+
     boolean isInputReaderThreadRunning() {
-        return inputReaderThreadRunning;
+        synchronized (inputReaderLock) {
+            return inputReaderThreadRunning;
+        }
     }
-    
+
     void clientConnected() {
         parentServer.clientConnected(this);
     }
-    
+
     void clientMessageReceived(Object msg) {
         parentServer.clientMessageReceived(this, msg);
     }
-    
+
     void handleClientError(Exception e) {
-        parentServer.handleClientError(this, e);
+        parentServer.handleClientException(this, e);
     }
 }
