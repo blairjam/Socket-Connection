@@ -8,173 +8,321 @@ import java.net.UnknownHostException;
 
 import com.connerblair.exceptions.ConnectionException;
 
+/**
+ * This class represents a UDP connection to a socket.
+ * 
+ * @author Conner Blair
+ * @version 1.0
+ */
 public abstract class UDPConnector {
-    public static final int DEF_PORT = -1;
+	public static final int DEF_PORT = -1;
 
-    private int port;
-    private InetAddress addr;
-    
-    private DatagramSocket socket;
+	private int port;
+	private InetAddress addr;
 
-    private final Object receiverLock = new Object();
-    private final Object senderLock = new Object();
-    private boolean receiverThreadRunning = false;
-    private boolean senderThreadRunning = false;
-    private UDPConnectorSocketReceiverThread receiverThread;
-    private UDPConnectorSocketSenderThread senderThread;
+	private DatagramSocket socket;
 
-    protected UDPConnector() {
-        this(DEF_PORT);
-    }
+	private final Object receiverLock = new Object();
+	private final Object senderLock = new Object();
+	private boolean receiverThreadRunning = false;
+	private boolean senderThreadRunning = false;
+	private UDPConnectorSocketReceiverThread receiverThread;
+	private UDPConnectorSocketSenderThread senderThread;
 
-    protected UDPConnector(int port) {
-        this(port, null);
-    }
+	/**
+	 * Creates a new instance of the UPDConnector class, with the default port.
+	 */
+	protected UDPConnector() {
+		this(DEF_PORT);
+	}
 
-    protected UDPConnector(int port, String address) {
-        this.port = port;
+	/**
+	 * Creates a new instance of the UDPConnector class, with the specified
+	 * port.
+	 * 
+	 * @param port
+	 *            The port to which this connector is bound.
+	 */
+	protected UDPConnector(int port) {
+		this(port, null);
+	}
 
-        try {
-            addr = InetAddress.getByName(address);
-        } catch (UnknownHostException e) {
-            handleException(new ConnectionException("Host name could not be resolved. Name: " + address, e));
-            addr = null;
-        }
-    }
+	/**
+	 * Creates a new instance of the UDPConnector class, with the specified port
+	 * and address.
+	 * 
+	 * @param port
+	 *            The port to which this connector is bound.
+	 * @param address
+	 *            The address to which this connector is bound.
+	 */
+	protected UDPConnector(int port, String address) {
+		this.port = port;
 
-    public final void start() {
-        if (!initialize()) {
-            return;
-        }
+		// Convert the string address to a InetAddress.
+		try {
+			addr = InetAddress.getByName(address);
+		} catch (UnknownHostException e) {
+			handleException(new ConnectionException("Host name could not be resolved. Name: " + address, e));
+			addr = null;
+		}
+	}
 
-        synchronized (receiverLock) {
-            receiverThreadRunning = true;
-        }
-        synchronized (senderLock) {
-            senderThreadRunning = true;
-        }
+	/**
+	 * Starts the receiver and sender threads running.
+	 */
+	public final void start() {
+		if (isRunning()) {
+			handleException(new ConnectionException("This connector is already running."));
+			return;
+		}
 
-        receiverThread = new UDPConnectorSocketReceiverThread(this);
-        senderThread = new UDPConnectorSocketSenderThread(this);
+		if (!initialize()) {
+			return;
+		}
 
-        receiverThread.start();
-        senderThread.start();
-    }
+		synchronized (receiverLock) {
+			receiverThreadRunning = true;
+		}
+		synchronized (senderLock) {
+			senderThreadRunning = true;
+		}
 
-    public final void stop() {
-        synchronized (receiverLock) {
-            receiverThreadRunning = false;
-        }
-        synchronized (senderLock) {
-            senderThreadRunning = false;
-        }
+		receiverThread = new UDPConnectorSocketReceiverThread(this);
+		senderThread = new UDPConnectorSocketSenderThread(this);
 
-        try {
-            receiverThread.join();
-        } catch (InterruptedException e) {
-            handleException(e);
-        }
+		receiverThread.start();
+		senderThread.start();
+	}
 
-        try {
-            senderThread.join();
-        } catch (InterruptedException e) {
-            handleException(e);
-        }
+	/**
+	 * Stops the receiver and sender threads.
+	 */
+	public final void stop() {
+		synchronized (receiverLock) {
+			receiverThreadRunning = false;
+		}
+		synchronized (senderLock) {
+			senderThreadRunning = false;
+		}
 
-        socket.close();
-    }
+		// Join the two threads.
+		try {
+			receiverThread.join();
+		} catch (InterruptedException e) {
+			handleException(e);
+		}
 
-    public final int getPort() {
-        return port;
-    }
+		try {
+			senderThread.join();
+		} catch (InterruptedException e) {
+			handleException(e);
+		}
 
-    public final void setPort(int port) {
-        if (isRunning()) {
-            handleException(new ConnectionException("Cannot change port while server is running."));
-        } else {
-            this.port = port;
-        }
-    }
+		// Close the socket.
+		socket.close();
 
-    public final InetAddress getAddr() {
-        return addr;
-    }
+		// Call the stopped hook methods.
+		receiverStopped();
+		senderStopped();
+	}
 
-    public final void setAddr(String address) {
-        try {
-            setAddr(InetAddress.getByName(address));
-        } catch (UnknownHostException e) {
-            handleException(new ConnectionException("Host name could not be resolved. Name: " + address, e));
-            addr = null;
-        }
-    }
+	/**
+	 * Accessor method for the port to which this connector is bound.
+	 * 
+	 * @return int The port of this connector.
+	 */
+	public final int getPort() {
+		return port;
+	}
 
-    public final void setAddr(InetAddress addr) {
-        if (isRunning()) {
-            handleException(new ConnectionException("Cannot change address while server is running."));
-        } else {
-            this.addr = addr;
-        }
-    }
+	/**
+	 * Mutator method for the port to which this connector is bound. <br>
+	 * If the connector is not stopped, this call will have no effect.
+	 * 
+	 * @param port
+	 *            The new port to bind the connector to.
+	 */
+	public final void setPort(int port) {
+		if (isRunning()) {
+			handleException(new ConnectionException("Cannot change port while server is running."));
+		} else {
+			this.port = port;
+		}
+	}
 
-    public final boolean isRunning() {
-    	boolean running;
-    	
-        synchronized(receiverLock) {
-        	running = receiverThreadRunning;
-        }
-        
-        synchronized(senderLock) {
-        	running = running && senderThreadRunning;
-        }
-        
-        return running;
-    }
+	/**
+	 * Accessor method for the address of the connector.
+	 * 
+	 * @return {@linkplain InetAddress} The address of the connector.
+	 */
+	public final InetAddress getAddr() {
+		return addr;
+	}
 
-    DatagramSocket getSocket() {
-        return socket;
-    }
+	/**
+	 * Mutator method for the address of the connector. <br>
+	 * If the connector is not stopped, this call will have no effect.
+	 * 
+	 * @param address
+	 *            The new address of the connector.
+	 */
+	public final void setAddr(String address) {
+		try {
+			setAddr(InetAddress.getByName(address));
+		} catch (UnknownHostException e) {
+			handleException(new ConnectionException("Host name could not be resolved. Name: " + address, e));
+		}
+	}
 
-    boolean isReceiverThreadRunning() {
-        synchronized (receiverLock) {
-            return receiverThreadRunning;
-        }
-    }
+	/**
+	 * Mutator method for the address of the connector. <br>
+	 * If the connector is not stopped, this call will have no effect.
+	 * 
+	 * @param address
+	 *            The new address of the connector.
+	 */
+	public final void setAddr(InetAddress addr) {
+		if (isRunning()) {
+			handleException(new ConnectionException("Cannot change address while server is running."));
+		} else {
+			this.addr = addr;
+		}
+	}
 
-    boolean isSenderThreadRunning() {
-        synchronized (senderLock) {
-            return senderThreadRunning;
-        }
-    }
+	/**
+	 * Accessor method to see if the connector is running.
+	 * 
+	 * @return boolean True if the connector is running, false if not.
+	 */
+	public final boolean isRunning() {
+		boolean running;
 
-    protected Object getReceiverLock() {
-        return receiverLock;
-    }
+		synchronized (receiverLock) {
+			running = receiverThreadRunning;
+		}
 
-    protected Object getSenderLock() {
-        return senderLock;
-    }
+		synchronized (senderLock) {
+			running = running && senderThreadRunning;
+		}
 
-    protected abstract void handleException(Exception e);
+		return running;
+	}
 
-    protected abstract void handlePacketReceived(DatagramPacket packet);
+	/**
+	 * Accessor method for the socket of the connector.
+	 * 
+	 * @return {@linkplain DatagramSocket} The socket of the connector.
+	 */
+	DatagramSocket getSocket() {
+		return socket;
+	}
 
-    protected abstract byte[] getByteBuffer();
+	/**
+	 * Accessor method to see if the receiver thread is running.
+	 * 
+	 * @return boolean True if the receiver thread is running, false if not.
+	 */
+	boolean isReceiverThreadRunning() {
+		synchronized (receiverLock) {
+			return receiverThreadRunning;
+		}
+	}
 
-    protected abstract DatagramPacket createPacketToSend();
+	/**
+	 * Accessor method to see if the receiver thread is running.
+	 *
+	 * @return boolean True if the sender thread is running, false if not.
+	 */
+	boolean isSenderThreadRunning() {
+		synchronized (senderLock) {
+			return senderThreadRunning;
+		}
+	}
 
-    protected abstract void receiverRunning();
+	/**
+	 * Accessor method for the receiver lock object.
+	 * 
+	 * @return {@linkplain Object} The receiver lock.
+	 */
+	protected Object getReceiverLock() {
+		return receiverLock;
+	}
 
-    protected abstract void senderRunning();
+	/**
+	 * Accessor method for the sender lock object.
+	 * 
+	 * @return {@linkplain Object} The sender lock.
+	 */
+	protected Object getSenderLock() {
+		return senderLock;
+	}
 
-    private boolean initialize() {
-        try {
-            socket = addr == null ? new DatagramSocket(port) : new DatagramSocket(port, addr);
-        } catch (SocketException e) {
-            handleException(new ConnectionException("A problem occured while intilizing the socket.", e));
-            return false;
-        }
+	/**
+	 * Hook method called when the connector throws an exception.
+	 * 
+	 * @param e
+	 *            The exception thrown.
+	 */
+	protected abstract void handleException(Exception e);
 
-        return true;
-    }
+	/**
+	 * Hook method called when the connector
+	 * 
+	 * @param packet
+	 */
+	protected abstract void handlePacketReceived(DatagramPacket packet);
+
+	/**
+	 * Slot method called when the connector needs a byte array to store
+	 * incoming data.
+	 * 
+	 * @return byte[] To store data in.
+	 */
+	protected abstract byte[] getByteBuffer();
+
+	/**
+	 * Slot method called when the connector needs a packet to send. <br>
+	 * If the packet is null, this calling method skips it.
+	 * 
+	 * @return {@linkplain DatagramPacket} The packet to send.
+	 */
+	protected abstract DatagramPacket createPacketToSend();
+
+	/**
+	 * Hook method called when the receiver thread is started.
+	 */
+	protected abstract void receiverRunning();
+
+	/**
+	 * Hook method called when the sender thread is started.
+	 */
+	protected abstract void senderRunning();
+
+	/**
+	 * Hook method called when the receiver thread is stopped.
+	 */
+	protected abstract void receiverStopped();
+
+	/**
+	 * Hook method called when the sender thread is stopped.
+	 */
+	protected abstract void senderStopped();
+
+	/**
+	 * Initializes the socket with the port and address.
+	 * 
+	 * @return boolean True if the socket is initialized successfully, false if
+	 *         not.
+	 */
+	private boolean initialize() {
+		try {
+			socket = addr == null ? new DatagramSocket(port) : new DatagramSocket(port, addr);
+		} catch (SocketException e) {
+			handleException(new ConnectionException("A problem occured while intilizing the socket.", e));
+			return false;
+		}
+
+		return true;
+	}
 }
