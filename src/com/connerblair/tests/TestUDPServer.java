@@ -67,6 +67,16 @@ public class TestUDPServer extends UDPConnector {
     protected synchronized void senderRunning() {
         System.out.println("Sender thread running.");
     }
+    
+    @Override
+    protected void receiverStopped() {
+        System.out.println("Receiver stopped.");        
+    }
+
+    @Override
+    protected void senderStopped() {
+        System.out.println("Sender stopped.");
+    }
 
     private class Packet {
         public InetAddress Address;

@@ -68,9 +68,21 @@ public class TestUDPClient extends UDPConnector {
     protected synchronized void senderRunning() {
         System.out.println("Sender running.");
     }
+    
+    @Override
+    protected void receiverStopped() {
+        System.out.println("Receiver stopped.");        
+    }
+
+    @Override
+    protected void senderStopped() {
+        System.out.println("Sender stopped.");
+    }
 
     public static void main(String[] args) {
         TestUDPClient client = new TestUDPClient();
         client.start();
     }
+
+    
 }
