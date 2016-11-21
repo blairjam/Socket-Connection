@@ -10,7 +10,7 @@ class TCPClientInputReaderThread extends Thread {
 
 	@Override
 	public void run() {
-		parentClient.connectionClosed();
+		parentClient.connectionOpened();
 
 		Object msg;
 

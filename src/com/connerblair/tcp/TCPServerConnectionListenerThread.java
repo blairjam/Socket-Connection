@@ -33,7 +33,7 @@ class TCPServerConnectionListenerThread extends Thread {
                     new ClientConnection(parentServer, clientSocket);
                 }
             } catch (IOException e) {
-                parentServer.handleException(e);
+                //parentServer.handleException(e);
             }
         }
     }

@@ -6,12 +6,16 @@ import java.io.ObjectOutputStream;
 import java.net.InetAddress;
 import java.net.Socket;
 import java.net.SocketException;
+import java.util.HashMap;
+import java.util.Hashtable;
 
 import com.connerblair.exceptions.ConnectionException;
 
 public final class ClientConnection {
     private TCPServer parentServer;
     private Socket clientSocket;
+    
+    private Hashtable<String, String> info;
 
     private ObjectInputStream input;
     private ObjectOutputStream output;
@@ -23,6 +27,8 @@ public final class ClientConnection {
     public ClientConnection(TCPServer parentServer, Socket clientSocket) {
         this.parentServer = parentServer;
         this.clientSocket = clientSocket;
+        
+        info = new Hashtable<String, String>();
 
         try {
             this.clientSocket.setSoTimeout(0);
@@ -93,6 +99,14 @@ public final class ClientConnection {
 
     public InetAddress getInetAddress() {
         return clientSocket == null ? null : clientSocket.getInetAddress();
+    }
+    
+    public void setInfo(String key, String value) {
+    	info.put(key, value);
+    }
+    
+    public String getInfo(String key){
+    	return info.get(key);
     }
 
     ObjectInputStream getConnectionInputStream() {
